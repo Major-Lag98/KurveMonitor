@@ -1,0 +1,53 @@
+name: Kurve availability check
+
+on:
+  schedule:
+    # Runs every 30 minutes, UTC. Adjust to taste - GitHub may delay a
+    # scheduled run by a few minutes during high load, especially right
+    # at the top of the hour.
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
+
+# Stops two runs from racing to commit/push the state file at the same time.
+concurrency:
+  group: kurve-monitor
+  cancel-in-progress: false
+
+# Needed so the job can push the updated kurve_units_seen.json back to the repo.
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          KURVE_DISCORD_WEBHOOK: ${{ secrets.KURVE_DISCORD_WEBHOOK }}
+          KURVE_DISCORD_MENTION: ${{ secrets.KURVE_DISCORD_MENTION }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          KURVE_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.KURVE_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python kurve_monitor.py
+
+      - name: Commit updated state file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kurve_units_seen.json
+          if git diff --cached --quiet; then
+            echo "No state changes to commit"
+          else
+            git commit -m "Update seen-units state"
+            git push
+          fi
