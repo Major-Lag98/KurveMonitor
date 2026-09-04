@@ -53,11 +53,20 @@ import sys
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()  # loads variables from a local .env file, if present, into os.environ
+
+# Always use LA time for date-stamped output (log timestamps, the Google
+# Sheet's date column) instead of the machine's local clock. This matters
+# because the machine running this script isn't always in the same
+# timezone - your own PC happens to be set to Pacific, but a GitHub
+# Actions runner defaults to UTC, so datetime.now() there would return a
+# time up to 7-8 hours ahead of LA, rolling the date over too early.
+LOCAL_TZ = ZoneInfo("America/Los_Angeles")
 
 LOG_FILE = Path(__file__).parent / "kurve_monitor.log"
 WRITE_OUTPUT_TO_FILE = False
@@ -327,7 +336,7 @@ def log_prices_to_sheet(available_units):
             "(you'll lose rows already logged)."
         )
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
 
     if today_str in header:
         date_col = header.index(today_str) + 1  # 1-indexed
@@ -420,7 +429,7 @@ def main(verbose=False):
     setup_logging(verbose)
 
     logger.info("Starting Kurve availability check")
-    output(f"[{datetime.now().isoformat(timespec='seconds')}] checking Kurve availability...")
+    output(f"[{datetime.now(LOCAL_TZ).isoformat(timespec='seconds')}] checking Kurve availability...")
 
     try:
         current = fetch_current_units()
