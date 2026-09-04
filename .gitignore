@@ -3,4 +3,3 @@ kurve_monitor.log
 venv/
 __pycache__/
 *.pyc
-kurve_units_seen.json
