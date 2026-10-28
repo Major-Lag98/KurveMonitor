@@ -278,7 +278,8 @@ def log_prices_to_sheet(available_units):
     simply stop writing new cells for them, which leaves those days blank.
     If a unit comes back later, its existing row is reused and filling in
     resumes at the current date, so the gap in between stays blank exactly
-    as it should.
+    as it should. New units are appended, then the rows are re-sorted by
+    Unit ID.
     """
     if not GOOGLE_SHEET_ID:
         return  # feature disabled - no sheet configured
@@ -384,6 +385,16 @@ def log_prices_to_sheet(available_units):
     if new_rows:
         ws.append_rows(new_rows)
         logger.debug("Added %s new unit row(s) to the price sheet", len(new_rows))
+
+    # Keep rows in Unit ID order so new units don't pile up at the bottom.
+    # This runs after all of this run's writes (which used the row order read
+    # above), and the sort moves whole rows across every column, so each
+    # price stays with its unit.
+    unit_ids = [row[0] for row in all_values[1:] if row and row[0]]
+    if new_rows or unit_ids != sorted(unit_ids):
+        last_cell = rowcol_to_a1(len(all_values) + len(new_rows), len(header))
+        ws.sort((1, "asc"), range=f"A2:{last_cell}")
+        logger.debug("Sorted price sheet rows A2:%s by Unit ID", last_cell)
 
 
 def notify(message):
