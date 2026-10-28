@@ -30,8 +30,9 @@ All dates and timestamps use `America/Los_Angeles` (`LOCAL_TZ`), not the machine
 
 ## State file and CI
 
-- `kurve_units_seen.json` is committed on purpose: it's the persistent snapshot between runs. `.github/workflows/kurve-monitor.yml` runs the script, then commits and pushes the file as `github-actions[bot]` whenever it changes. The bot pushes to `main` often, so pull before pushing, and expect conflicts on this file if you've run the script locally (prefer the remote copy).
-- The workflow has a `concurrency` group so two runs can't race on the push, and `workflow_dispatch` for manual runs.
+- `kurve_units_seen.json` is git-ignored: it's the persistent snapshot between runs, kept locally and never committed. Local runs and CI each have their own copy.
+- In CI (`.github/workflows/kurve-monitor.yml`), the snapshot lives in the Actions cache. Each run restores the newest `kurve-state-*` cache and saves a new one keyed by `run_id`, because caches are immutable. If the cache is evicted (7 days unused), the next run records a fresh baseline and sends no alerts.
+- The workflow has a `concurrency` group so overlapping runs can't race on the cache, and `workflow_dispatch` for manual runs.
 
 ## Configuration
 
