@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-script monitor (`kurve_monitor.py`) that watches apartment availability at Kurve on Wilshire. It polls the SightMap JSON API that backs the floorplan widget on kurveonwilshire.com, compares available units to the last saved snapshot, posts new/gone units to Discord, and (optionally) logs daily prices to a Google Sheet. It runs every 30 minutes on GitHub Actions. There are no tests, linter, or build step.
+A single-script monitor (`kurve_monitor.py`) that watches apartment availability at Kurve on Wilshire. It polls the SightMap JSON API that backs the floorplan widget on kurveonwilshire.com, compares available units to the last saved snapshot, posts new/gone units to Discord, and (optionally) logs daily prices to a Google Sheet. It runs hourly on the user's Windows machine via Task Scheduler. (GitHub Actions was tried and dropped because scheduled runs didn't fire on time.) There are no tests, linter, or build step.
 
 ## Commands
 
@@ -26,17 +26,16 @@ One run of `main()`:
 5. The run diffs against `kurve_units_seen.json` and calls `notify()` for each new or gone unit. If there is no previous state, it records a baseline and sends nothing. Plans listed in `SPECIAL_PLANS` get `KURVE_DISCORD_MENTION` prepended.
 6. `save_current()` writes only the *available* units back to the state file.
 
-All dates and timestamps use `America/Los_Angeles` (`LOCAL_TZ`), not the machine clock, because the Actions runner is on UTC. `tzdata` is in requirements for that reason.
+All dates and timestamps use `America/Los_Angeles` (`LOCAL_TZ`), not the machine clock, so output stays correct on any host. `tzdata` is in requirements because Windows has no system tz database.
 
-## State file and CI
+## Scheduling and state
 
-- `kurve_units_seen.json` is git-ignored: it's the persistent snapshot between runs, kept locally and never committed. Local runs and CI each have their own copy.
-- In CI (`.github/workflows/kurve-monitor.yml`), the snapshot lives in the Actions cache. Each run restores the newest `kurve-state-*` cache and saves a new one keyed by `run_id`, because caches are immutable. If the cache is evicted (7 days unused), the next run records a fresh baseline and sends no alerts.
-- The workflow has a `concurrency` group so overlapping runs can't race on the cache, and `workflow_dispatch` for manual runs.
+- The user maintains a Task Scheduler task named `Kurve Unit Monitor` (don't create or modify it unless asked). It starts at logon, repeats every hour, and runs `venv\Scripts\python.exe kurve_monitor.py` with the repo as its working directory. It runs without `-v`, so scheduled runs don't write `kurve_monitor.log`. Check it with `Get-ScheduledTask 'Kurve Unit Monitor' | Get-ScheduledTaskInfo` (`LastRunTime`, `LastTaskResult`) or trigger a run with `Start-ScheduledTask 'Kurve Unit Monitor'`.
+- `kurve_units_seen.json` is the snapshot between runs. It's git-ignored and lives only on this machine. Deleting it makes the next run record a fresh baseline with no alerts.
 
 ## Configuration
 
-Secrets come from environment variables, loaded from a git-ignored `.env` locally and from repo secrets in CI:
+Secrets come from environment variables, loaded from the git-ignored `.env` next to the script:
 - `KURVE_DISCORD_WEBHOOK`, `KURVE_DISCORD_MENTION`
 - `GOOGLE_SHEET_ID` (leave empty to turn sheet logging off)
 - `KURVE_GOOGLE_SERVICE_ACCOUNT_JSON`: the full service-account key JSON as one string, not a file path
